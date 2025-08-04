@@ -1,0 +1,213 @@
+// File: /src/App.jsx
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Auth0Provider, useAuth0 } from '@auth0/auth0-react';
+import Splash from './pages/Splash';
+import Home from './pages/Home';
+import Booking from './pages/Booking';
+import About from './pages/About';
+import Location from './pages/Location';
+import Dashboard from './pages/Dashboard';
+
+const AuthWrapper = ({ children }) => {
+  const { isLoading, isAuthenticated, loginWithRedirect } = useAuth0();
+  if (isLoading) return <div>Loading...</div>;
+  if (!isAuthenticated) {
+    loginWithRedirect();
+    return null;
+  }
+  return <>{children}</>;
+};
+
+function App() {
+  return (
+    <Auth0Provider
+      domain={process.env.REACT_APP_AUTH0_DOMAIN}
+      clientId={process.env.REACT_APP_AUTH0_CLIENT_ID}
+      authorizationParams={{ redirect_uri: window.location.origin }}
+    >
+      <Router>
+        <AuthWrapper>
+          <Routes>
+            <Route path="/" element={<Splash />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/booking" element={<Booking />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/location" element={<Location />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Routes>
+        </AuthWrapper>
+      </Router>
+    </Auth0Provider>
+  );
+}
+
+export default App;
+
+// File: /src/pages/Dashboard.jsx
+import React, { useEffect, useState } from 'react';
+
+const Dashboard = () => {
+  const [bookings, setBookings] = useState([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/bookings`);
+        const data = await res.json();
+        setBookings(data);
+      } catch (err) {
+        console.error('Error fetching bookings:', err);
+      }
+    };
+    fetchData();
+  }, []);
+
+  return (
+    <div className="dashboard">
+      <h2>Barber Dashboard</h2>
+      <ul>
+        {bookings.map((booking, index) => (
+          <li key={index}>
+            {booking.name} - {booking.service} on {booking.date} at {booking.time}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default Dashboard;
+
+// File: /src/pages/Booking.jsx
+import React, { useState } from 'react';
+
+const Booking = () => {
+  const [form, setForm] = useState({ name: '', service: '', date: '', time: '' });
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      });
+      if (!response.ok) throw new Error('Network response was not ok');
+      await response.json();
+      alert('Booking confirmed!');
+      setForm({ name: '', service: '', date: '', time: '' });
+    } catch (error) {
+      console.error('Booking failed:', error);
+      alert('Error submitting booking');
+    }
+  };
+
+  return (
+    <div className="booking-form">
+      <h2>Book an Appointment</h2>
+      <form onSubmit={handleSubmit}>
+        <input name="name" placeholder="Full Name" value={form.name} onChange={handleChange} required />
+        <select name="service" value={form.service} onChange={handleChange} required>
+          <option value="">Select Service</option>
+          <option value="Haircut">Haircut</option>
+          <option value="Fade">Fade</option>
+          <option value="Shave">Shave</option>
+        </select>
+        <input type="date" name="date" value={form.date} onChange={handleChange} required />
+        <input type="time" name="time" value={form.time} onChange={handleChange} required />
+        <button type="submit">Confirm Booking</button>
+      </form>
+    </div>
+  );
+};
+
+export default Booking;
+
+// File: /server/models/Booking.js
+const mongoose = require('mongoose');
+
+const bookingSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  service: { type: String, required: true },
+  date: { type: String, required: true },
+  time: { type: String, required: true }
+});
+
+module.exports = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
+
+// File: /server/server.js
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
+require('dotenv').config();
+const Booking = require('./models/Booking');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+
+app.post('/bookings', async (req, res) => {
+  try {
+    const booking = new Booking(req.body);
+    await booking.save();
+    res.status(201).json(booking);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find();
+    res.status(200).json(bookings);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.listen(5000, () => console.log('Server running on http://localhost:5000'));
+
+// Styling: /src/index.css
+body {
+  font-family: 'Helvetica Neue', sans-serif;
+  background: #f3f4f6;
+  color: #1f2937;
+  margin: 0;
+}
+.booking-form, .dashboard {
+  max-width: 600px;
+  margin: 3rem auto;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+input, select, button {
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+button {
+  background: #111827;
+  color: #fff;
+  cursor: pointer;
+}
+button:hover {
+  background: #374151;
+}
+
+// Add to .env:
+// REACT_APP_API_URL=http://localhost:5000
+
+// Run backend: node server/server.js
+// Run frontend: npm start
