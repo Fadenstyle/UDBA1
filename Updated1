@@ -144,8 +144,8 @@ module.exports = mongoose.models.Booking || mongoose.model('Booking', bookingSch
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const stripe = require('stripe')(process.env.STRIPE_SECRET);
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 const Booking = require('./models/Booking');
 
 const app = express();
